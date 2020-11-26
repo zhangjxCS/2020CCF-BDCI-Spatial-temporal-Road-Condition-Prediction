@@ -56,3 +56,4 @@ print(traffic_feature.iloc[0,:])
 #连接道路属性和实时路况数据，linkid为主键
 data = attr.join(traffic_feature.set_index('linkid'),on='linkid',how="right")
 print(data.iloc[22051,:])
+
