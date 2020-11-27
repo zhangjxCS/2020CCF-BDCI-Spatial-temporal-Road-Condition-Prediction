@@ -1,10 +1,8 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
 import copy
 import re
-import math
-
+from sklearn import tree
 
 #道路属性
 attr = pd.read_csv('attr.txt',sep='\t',names=['linkid','length','direction','pathclass','speedclass','LaneNum','speedlimit','level','width'])
@@ -54,6 +52,16 @@ print(traffic_feature.iloc[0,:])
 
 
 #连接道路属性和实时路况数据，linkid为主键
-data = attr.join(traffic_feature.set_index('linkid'),on='linkid',how="right")
+data = traffic_feature.join(attr.set_index('linkid'), on='linkid')
 print(data.iloc[22051,:])
 
+X_train = traffic_feature.iloc[:400000, 2:]
+Y_train = traffic_feature.iloc[:400000, 1]
+X_test = traffic_feature.iloc[400000:, 2:]
+Y_test = traffic_feature.iloc[400000:, 1]
+
+clf = tree.DecisionTreeClassifier()
+clf.fit(X_train, Y_train)
+tree.plot_tree(clf)
+result = clf.predict(X_test)
+error = np.sum(Y_test == result)/Y_train.shape[0]
