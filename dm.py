@@ -91,19 +91,20 @@ if __name__ == '__main__':
     # Decision Tree
     treeclf = tree.DecisionTreeClassifier()
     treeclf.fit(X_train, Y_train)
-    y_crossval = treeclf.fit(X_crossval)
+    y_crossval = treeclf.predict(X_crossval)
     scores = f1_score(Y_crossval, y_crossval, average=None)
     scores = scores[0] * 0.2 + scores[1] * 0.2 + scores[2] * 0.6
     print(scores)
     y_pred = treeclf.predict(X_test)
     """
     # LightGBM
-    Y_train = np.array(Y_train) - 1
+    Y_train = Y_train - 1
+    Y_crossval = Y_crossval - 1
     train_data = lgb.Dataset(X_train, label=Y_train)
     validation_data = lgb.Dataset(X_crossval, label=Y_crossval)
     params = {'learning_rate':0.1, 'lambda_l2':0.2, 'max_depth':8, 'objective':'multiclass', 'num_class':3}
     gbm = lgb.train(params, train_data, valid_sets=[validation_data])
-    y_pred = gbm.predict(X_test)
+    y_pred = np.argmax(gbm.predict(X_test), axis=1) + 1
 
     out = {'link':test['linkid'], 'current_slice_id':test['current_slice_id'], 'future_slice_id':test['future_slice_id'], 'label':y_pred}
     out = pd.DataFrame(out)
