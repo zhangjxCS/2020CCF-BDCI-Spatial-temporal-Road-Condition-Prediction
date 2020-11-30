@@ -2,66 +2,89 @@ import pandas as pd
 import numpy as np
 import copy
 import re
-from sklearn import tree
+from sklearn import svm, tree
+from sklearn.metrics import f1_score, confusion_matrix, precision_score, recall_score
 
-#道路属性
-attr = pd.read_csv('attr.txt',sep='\t',names=['linkid','length','direction','pathclass','speedclass','LaneNum','speedlimit','level','width'])
+def feature_split(x):
+    y = re.split('[:,]',x)
+    return y
 
-'''
-#拓扑
-topo = pd.read_csv('topo.txt',sep='\t',names=['key','value'])
-topo_dict = {}
-for i in range(len(topo)):
-    print(i)
-    key = topo.iloc[i,0]
-    value = list(map(int,topo.iloc[i,1].split(',')))
-    topo_dict[key] = value
- '''
+def loaddata():
+    # Load attributes data
+    attr = pd.read_csv('attr.txt', sep='\t',
+                       names=['linkid', 'length', 'direction', 'pathclass', 'speedclass', 'LaneNum', 'speedlimit',
+                              'level', 'width'])
+    # Load topo data
+    topo = pd.read_csv('topo.txt', sep='\t', names=['key', 'value'])
+    topo_dict = {}
+    for i in range(len(topo)):
+        print(i)
+        key = topo.iloc[i, 0]
+        value = list(map(int, topo.iloc[i, 1].split(',')))
+        topo_dict[key] = value
+    return attr, topo_dict
 
-#历史与实时路况
-traffic = pd.read_csv('20190701.txt',sep=' |;',names=['linkid','label','current_slice_id','future_slice_id','recent_feature_1'
+def loadtradata(file, attr, topo_dict):
+    # Load traffic data
+    traffic = pd.read_csv(file, sep=' |;',names=['linkid','label','current_slice_id','future_slice_id','recent_feature_1'
     ,'recent_feature_2','recent_feature_3','recent_feature_4','recent_feature_5','history_feature_1_1','history_feature_1_2'
     ,'history_feature_1_3','history_feature_1_4','history_feature_1_5','history_feature_2_1','history_feature_2_2'
     ,'history_feature_2_3','history_feature_2_4','history_feature_2_5','history_feature_3_1','history_feature_3_2'
     ,'history_feature_3_3','history_feature_3_4','history_feature_3_5','history_feature_4_1','history_feature_4_2'
     ,'history_feature_4_3','history_feature_4_4','history_feature_4_5'])
-print(traffic.loc[0])
 
-'''
-#描述性统计
-attr_describe = attr.describe()
-traffic_describe = traffic.describe()
-'''
+    # 将recent_feature分割，存储在traffic_feature中
+    traffic_feature = copy.deepcopy(traffic.iloc[:,0:4])
+    for i in range(5):
+        print(i)
+        recent_feature_split = pd.DataFrame(map(feature_split,traffic.iloc[:,4+i]))
+        traffic_feature[f'recent_feature_{i+1}_road_velocity'] = recent_feature_split[1]
+        traffic_feature[f'recent_feature_{i+1}_eta_velocity'] = recent_feature_split[2]
+        traffic_feature[f'recent_feature_{i+1}_road_condition'] = recent_feature_split[3]
+        traffic_feature[f'recent_feature_{i+1}_car_num'] = recent_feature_split[4]
+    # 将数据集转换成数值形式
+    traffic_feature = traffic_feature.apply(pd.to_numeric)
+    # 预处理label部分
+    label = traffic_feature['label']
+    label[label < 1] = 1
+    label[label > 3] = 3
+    traffic_feature['label'] = label
+    for i in range(5):
+        condition = traffic_feature[f'recent_feature_{i + 1}_road_condition']
+        condition[condition < 1] = 1
+        condition[condition > 3] = 3
+        traffic_feature[f'recent_feature_{i + 1}_road_condition'] = condition
+    traffic_feature.head()
+    #连接道路属性和实时路况数据，linkid为主键
+    data = traffic_feature.join(attr.set_index('linkid'), on='linkid')
+    return data
 
-#分割特征的函数（时间片：路况速度，eta速度，路况状态，车辆数）
-def feature_split(x):
-    y = re.split(':|,',x)
-    return y
+if __name__ == '__main__':
 
+    attr, topo_dict = loaddata()
+    data = pd.DataFrame()
+    for i in range(1, 10):
+        filename = 20190700 + i
+        strfile = str(filename) + '.txt'
+        dataset = loadtradata(strfile, attr, topo_dict)
+        df1 = dataset.loc[dataset['label'] == 1]
+        df2 = dataset.loc[dataset['label'] == 2]
+        df3 = dataset.loc[dataset['label'] == 3]
+        num = df1.shape[0]//2
+        random_df1 = df1.sample(n=num, random_state=3)
+        df = pd.concat([random_df1, df2, df3])
+        data = data.append(df)
+    print(data.head())
+    X_train = data.iloc[:, 2:]
+    Y_train = data.iloc[:, 1]
 
-#将recent_feature分割，存储在traffic_feature中
-traffic_feature = copy.deepcopy(traffic.iloc[:,0:4])
-for i in range(5):
-    print(i)
-    recent_feature_split = pd.DataFrame(map(feature_split,traffic.iloc[:,4+i]))
-    traffic_feature[f'recent_feature_{i+1}_road_velocity'] = recent_feature_split[1]
-    traffic_feature[f'recent_feature_{i+1}_eta_velocity'] = recent_feature_split[2]
-    traffic_feature[f'recent_feature_{i+1}_road_condition'] = recent_feature_split[3]
-    traffic_feature[f'recent_feature_{i+1}_car_num'] = recent_feature_split[4]
-print(traffic_feature.iloc[0,:])
+    test = loadtradata('20190801_testdata.txt', attr, topo_dict)
+    X_test = test.iloc[:,2:]
 
-
-#连接道路属性和实时路况数据，linkid为主键
-data = traffic_feature.join(attr.set_index('linkid'), on='linkid')
-print(data.iloc[22051,:])
-
-X_train = traffic_feature.iloc[:400000, 2:]
-Y_train = traffic_feature.iloc[:400000, 1]
-X_test = traffic_feature.iloc[400000:, 2:]
-Y_test = traffic_feature.iloc[400000:, 1]
-
-clf = tree.DecisionTreeClassifier()
-clf.fit(X_train, Y_train)
-tree.plot_tree(clf)
-result = clf.predict(X_test)
-error = np.sum(Y_test == result)/Y_train.shape[0]
+    # Decision Tree
+    treeclf = tree.DecisionTreeClassifier()
+    treeclf.fit(X_train, Y_train)
+    y_pred = treeclf.predict(X_test)
+    out = {'link':test['linkid'], 'current_slice_id':test['current_slice_id'], 'future_slice_id':test['future_slice_id'], 'label':y_pred}
+    out = pd.DataFrame(out)
+    out.to_csv('result.csv', index=False)
