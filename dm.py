@@ -12,9 +12,7 @@ def feature_split(x):
 
 def loaddata():
     # Load attributes data
-    attr = pd.read_csv('attr.txt', sep='\t',
-                       names=['linkid', 'length', 'direction', 'pathclass', 'speedclass', 'LaneNum', 'speedlimit',
-                              'level', 'width'])
+    attr = pd.read_csv('attr.txt', sep='\t',names=['linkid', 'length', 'direction', 'pathclass', 'speedclass', 'LaneNum', 'speedlimit','level', 'width'])
     # Load topo data
     topo = pd.read_csv('topo.txt', sep='\t', names=['key', 'value'])
     topo_dict = {}
@@ -27,22 +25,23 @@ def loaddata():
 
 def loadtradata(file, attr, topo_dict):
     # Load traffic data
-    traffic = pd.read_csv(file, sep=' |;',names=['linkid','label','current_slice_id','future_slice_id','recent_feature_1'
+    name = ['linkid','label','current_slice_id','future_slice_id','recent_feature_1'
     ,'recent_feature_2','recent_feature_3','recent_feature_4','recent_feature_5','history_feature_1_1','history_feature_1_2'
     ,'history_feature_1_3','history_feature_1_4','history_feature_1_5','history_feature_2_1','history_feature_2_2'
     ,'history_feature_2_3','history_feature_2_4','history_feature_2_5','history_feature_3_1','history_feature_3_2'
     ,'history_feature_3_3','history_feature_3_4','history_feature_3_5','history_feature_4_1','history_feature_4_2'
-    ,'history_feature_4_3','history_feature_4_4','history_feature_4_5'])
+    ,'history_feature_4_3','history_feature_4_4','history_feature_4_5']
+    traffic = pd.read_csv(file, sep=' |;',names=name)
+    traffic_feature = traffic.iloc[:, 0:4]
+    list = ['_road_velocity', '_eta_velocity', '_road_condition', '_car_num']
+    for i in range(4, traffic.shape[1]):
+        new_feature = traffic.iloc[:, i].str.split(',', expand=True)
+        column = [name[i] + j for j in list]
+        traffic_feature[column[0]] = new_feature.iloc[:, 0].str.split(':', expand=True)[1]
+        traffic_feature[column[1]] = new_feature[1]
+        traffic_feature[column[2]] = new_feature[2]
+        traffic_feature[column[3]] = new_feature[3]
 
-    # 将recent_feature分割，存储在traffic_feature中
-    traffic_feature = copy.deepcopy(traffic.iloc[:,0:4])
-    for i in range(5):
-        print(i)
-        recent_feature_split = pd.DataFrame(map(feature_split,traffic.iloc[:,4+i]))
-        traffic_feature[f'recent_feature_{i+1}_road_velocity'] = recent_feature_split[1]
-        traffic_feature[f'recent_feature_{i+1}_eta_velocity'] = recent_feature_split[2]
-        traffic_feature[f'recent_feature_{i+1}_road_condition'] = recent_feature_split[3]
-        traffic_feature[f'recent_feature_{i+1}_car_num'] = recent_feature_split[4]
     # 将数据集转换成数值形式
     traffic_feature = traffic_feature.apply(pd.to_numeric)
     # 预处理label部分
@@ -50,12 +49,6 @@ def loadtradata(file, attr, topo_dict):
     label[label < 1] = 1
     label[label > 3] = 3
     traffic_feature['label'] = label
-    for i in range(5):
-        condition = traffic_feature[f'recent_feature_{i + 1}_road_condition']
-        condition[condition < 1] = 1
-        condition[condition > 3] = 3
-        traffic_feature[f'recent_feature_{i + 1}_road_condition'] = condition
-    traffic_feature.head()
     #连接道路属性和实时路况数据，linkid为主键
     data = traffic_feature.join(attr.set_index('linkid'), on='linkid')
     return data
@@ -64,7 +57,7 @@ if __name__ == '__main__':
     # Load Data
     attr, topo_dict = loaddata()
     data = pd.DataFrame()
-    for i in range(1, 31):
+    for i in range(24, 31):
         filename = 20190700 + i
         strfile = str(filename) + '.txt'
         dataset = loadtradata(strfile, attr, topo_dict)
