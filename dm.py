@@ -3,7 +3,9 @@ import lightgbm as lgb
 import numpy as np
 import copy
 import re
-from sklearn import svm, tree
+from sklearn import tree
+from sklearn.decomposition import PCA
+from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import f1_score, confusion_matrix, precision_score, recall_score
 
 def feature_split(x):
@@ -41,6 +43,7 @@ def loadtradata(file, attr, topo_dict):
         traffic_feature[column[1]] = new_feature[1]
         traffic_feature[column[2]] = new_feature[2]
         traffic_feature[column[3]] = new_feature[3]
+        print(i)
 
     # 将数据集转换成数值形式
     traffic_feature = traffic_feature.apply(pd.to_numeric)
@@ -57,7 +60,7 @@ if __name__ == '__main__':
     # Load Data
     attr, topo_dict = loaddata()
     data = pd.DataFrame()
-    for i in range(24, 31):
+    for i in range(1, 2):
         filename = 20190700 + i
         strfile = str(filename) + '.txt'
         dataset = loadtradata(strfile, attr, topo_dict)
@@ -74,10 +77,9 @@ if __name__ == '__main__':
     data = data.sample(frac=1, random_state=1)
     # Split data into train data and test data
     num = data.shape[0]
-    X_train = data.iloc[:int(num*0.8), 2:]
-    Y_train = data.iloc[:int(num*0.8), 1]
-    X_crossval = data.iloc[int(num*0.8):, 2:]
-    Y_crossval = data.iloc[int(num*0.8):, 1]
+    X_train = data.iloc[:, 2:]
+    Y_train = data.iloc[:, 1]
+
     test = loadtradata('20190801_testdata.txt', attr, topo_dict)
     X_test = test.iloc[:,2:]
     """
@@ -91,14 +93,56 @@ if __name__ == '__main__':
     y_pred = treeclf.predict(X_test)
     """
     # LightGBM
-    Y_train = Y_train - 1
-    Y_crossval = Y_crossval - 1
-    train_data = lgb.Dataset(X_train, label=Y_train)
-    validation_data = lgb.Dataset(X_crossval, label=Y_crossval)
-    params = {'learning_rate':0.1, 'lambda_l2':0.2, 'max_depth':8, 'objective':'multiclass', 'num_class':3}
-    gbm = lgb.train(params, train_data, valid_sets=[validation_data])
-    y_pred = np.argmax(gbm.predict(X_test), axis=1) + 1
-
+    params1 = {
+        'max_depth': [4, 8, 16],
+        'num_leaves': [20, 40, 80],
+    }
+    params2 = {
+        'min_child_samples': [10, 15, 20, 25, 30],
+        'min_child_weight':[0, 0.0005, 0.001],
+    }
+    params3 = {
+        'feature_fraction': [0.6, 0.8, 1.0]
+    }
+    params4 = {
+        'bagging_fraction': [0.6, 0.8, 1],
+        'bagging_freq': [1, 2, 4],
+    }
+    params5 = {
+        'reg_alpha': [0.1, 0.2, 0.4],
+        'reg_lambda': [0.1, 0.2, 0.4],
+    }
+    params6 = {
+        'cat_smooth': [0, 10, 20],
+    }
+    gbm = lgb.LGBMClassifier(
+                             objective='multiclass',
+                             num_class=3,
+                             is_unbalance=True,
+                             max_depth=16,
+                             num_leaves=80,
+                             learning_rate=0.1,
+                             feature_fraction=1.0,
+                             min_child_samples=21,
+                             min_child_weight=0.001,
+                             bagging_fraction=1,
+                             bagging_freq=2,
+                             reg_alpha=0.001,
+                             reg_lambda=8,
+                             cat_smooth=0,
+                             num_iterations=200,
+                             )
+    gsearch = GridSearchCV(gbm, param_grid=params1, scoring='f1_macro', cv=3)
+    gsearch.fit(X_train, Y_train)
+    # Hyper parameter tuning
+    print('参数的最佳取值:{0}'.format(gsearch.best_params_))
+    print('最佳模型得分:{0}'.format(gsearch.best_score_))
+    print(gsearch.cv_results_['mean_test_score'])
+    print(gsearch.cv_results_['params'])
+    y_pred = gbm.predict(X_test)
+    """
+    # Output
     out = {'link':test['linkid'], 'current_slice_id':test['current_slice_id'], 'future_slice_id':test['future_slice_id'], 'label':y_pred}
     out = pd.DataFrame(out)
     out.to_csv('result.csv', index=False)
+    """
