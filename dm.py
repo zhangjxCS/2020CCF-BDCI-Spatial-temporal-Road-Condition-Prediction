@@ -44,9 +44,8 @@ def loadtradata(file, attr, inflow, outflow):
     traffic = pd.read_csv(file, sep=' |;',names=name)
     # 连接道路属性和实时路况数据，linkid为主键
     traffic_feature = traffic.iloc[:, 0:4]
-    traffic_feature.iloc[:, 3] = traffic.iloc[:, 3] - traffic.iloc[:, 2]
     list = ['_road_velocity', '_eta_velocity', '_road_condition']
-    for i in range(4, traffic_feature.shape[1]):
+    for i in range(4, traffic.shape[1]):
         new_feature = traffic.iloc[:, i].str.split(',', expand=True)
         column = [name[i] + j for j in list]
         traffic_feature[column[0]] = new_feature.iloc[:, 0].str.split(':', expand=True)[1]
@@ -68,7 +67,7 @@ if __name__ == '__main__':
     # Load Data
     attr, inflow, outflow = loaddata()
     data = pd.DataFrame()
-    for i in range(30, 31):
+    for i in range(24, 31):
         filename = 20190700 + i
         strfile = str(filename) + '.txt'
         dataset = loadtradata(strfile, attr, inflow, outflow)
@@ -91,7 +90,7 @@ if __name__ == '__main__':
     selector.fit(X_train, Y_train)
     X_train = selector.transform(X_train)
     test = loadtradata('20190801_testdata.txt', attr, inflow, outflow)
-    X_test = selector.transform(test.iloc[:,2:])
+    X_test = selector.transform(test.iloc[:, 2:])
     """
     # Decision Tree
     treeclf = tree.DecisionTreeClassifier()
@@ -139,14 +138,14 @@ if __name__ == '__main__':
                              min_child_weight=0,
                              bagging_fraction=0.8,
                              bagging_freq=1,
-                             reg_alpha=0.1,
-                             reg_lambda=0.4,
+                             reg_alpha=0,
+                             reg_lambda=0.2,
                              cat_smooth=0,
                              num_iterations=200,
                              class_weight = {1: 0.2, 2: 0.2, 3: 0.6}
                              )
     """
-    gsearch = GridSearchCV(gbm, param_grid=params4, scoring='f1_weighted', cv=3)
+    gsearch = GridSearchCV(gbm, param_grid=params5, scoring='f1_weighted', cv=3)
     gsearch.fit(X_train, Y_train)
     # Hyper parameter tuning
     print('参数的最佳取值:{0}'.format(gsearch.best_params_))
