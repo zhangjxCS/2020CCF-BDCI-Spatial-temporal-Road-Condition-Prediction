@@ -4,6 +4,8 @@
 
 比赛链接：https://www.datafountain.cn/competitions/466
 
+数据链接：https://cloud.tsinghua.edu.cn/f/365ec8978da743089fa0/
+
 最终我们组的比赛成绩是29/2482，在有成绩的组中排名29/214
 
 Github的文件分别是我们构建的模型
